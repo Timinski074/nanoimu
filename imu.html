@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>NanoIMU — Live Acceleration</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 16px;
+         background: #14151a; color: #eee; }
+  h1 { font-size: 20px; color: #00d4ff; margin: 0 0 12px; }
+  button { width: 100%; padding: 16px; font-size: 18px; border: none; border-radius: 10px;
+           margin-bottom: 12px; cursor: pointer; font-weight: 600;
+           background: #00d4ff; color: #001; }
+  button:disabled { background: #444; color: #888; }
+  .axis { background: #1e2027; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .axis-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .axis-name { font-size: 16px; font-weight: 700; }
+  .axis-val { font-family: ui-monospace, Menlo, monospace; font-size: 22px;
+              font-variant-numeric: tabular-nums; }
+  .bar-frame { position: relative; height: 14px; background: #0a0b0f; border-radius: 7px;
+               margin-top: 8px; overflow: hidden; }
+  .bar-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #555; }
+  .bar { position: absolute; top: 0; bottom: 0; transition: width 60ms linear, left 60ms linear; }
+  .x .bar { background: #ff5566; } .x .axis-name { color: #ff5566; }
+  .y .bar { background: #00ff88; } .y .axis-name { color: #00ff88; }
+  .z .bar { background: #00d4ff; } .z .axis-name { color: #00d4ff; }
+  .magnitude { font-size: 13px; color: #9aa; text-align: right; margin-top: 2px;
+               font-variant-numeric: tabular-nums; }
+  #stat { font-size: 12px; color: #777; margin-top: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<h1>NanoIMU — Beschleunigung live</h1>
+<button id="connectBtn">Mit NanoIMU verbinden</button>
+
+<div class="axis x">
+  <div class="axis-head"><span class="axis-name">X</span><span class="axis-val" id="vx">0.000 g</span></div>
+  <div class="bar-frame"><div class="bar-mid"></div><div class="bar" id="bx"></div></div>
+</div>
+<div class="axis y">
+  <div class="axis-head"><span class="axis-name">Y</span><span class="axis-val" id="vy">0.000 g</span></div>
+  <div class="bar-frame"><div class="bar-mid"></div><div class="bar" id="by"></div></div>
+</div>
+<div class="axis z">
+  <div class="axis-head"><span class="axis-name">Z</span><span class="axis-val" id="vz">0.000 g</span></div>
+  <div class="bar-frame"><div class="bar-mid"></div><div class="bar" id="bz"></div></div>
+</div>
+<div class="magnitude" id="mag">|a| = 0.000 g</div>
+<div id="stat">— nicht verbunden</div>
+
+<script>
+const SVC   = "b0000000-1234-5678-1234-56789abcdef0";
+const ACC   = "b0000001-1234-5678-1234-56789abcdef0";
+const RANGE = 2.0;   // ±2 g visual scale; clipped if exceeded
+let device, ch, sampleCount = 0, statStart = 0, statTimer = null;
+
+const $ = id => document.getElementById(id);
+
+function setBar(el, v) {
+  // Bar grows from center: negative left, positive right.
+  const pct = Math.max(-1, Math.min(1, v / RANGE));     // -1..1
+  const half = Math.abs(pct) * 50;                       // 0..50 (% of frame width)
+  if (pct >= 0) {
+    el.style.left = "50%";
+    el.style.width = half + "%";
+  } else {
+    el.style.left = (50 - half) + "%";
+    el.style.width = half + "%";
+  }
+}
+
+function onAccel(ev) {
+  const dv = ev.target.value;
+  const x = dv.getFloat32(0, true);
+  const y = dv.getFloat32(4, true);
+  const z = dv.getFloat32(8, true);
+  $("vx").textContent = x.toFixed(3) + " g";
+  $("vy").textContent = y.toFixed(3) + " g";
+  $("vz").textContent = z.toFixed(3) + " g";
+  setBar($("bx"), x); setBar($("by"), y); setBar($("bz"), z);
+  $("mag").textContent = "|a| = " + Math.sqrt(x*x + y*y + z*z).toFixed(3) + " g";
+  sampleCount++;
+}
+
+async function connect() {
+  try {
+    $("stat").textContent = "Suche…";
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "NanoIMU" }],
+      optionalServices: [SVC],
+    });
+    device.addEventListener("gattserverdisconnected", () => {
+      $("stat").textContent = "getrennt";
+      $("connectBtn").disabled = false;
+      if (statTimer) clearInterval(statTimer);
+    });
+    $("stat").textContent = "Verbinde…";
+    const server = await device.gatt.connect();
+    const svc = await server.getPrimaryService(SVC);
+    ch = await svc.getCharacteristic(ACC);
+    await ch.startNotifications();
+    ch.addEventListener("characteristicvaluechanged", onAccel);
+    $("connectBtn").disabled = true;
+    sampleCount = 0; statStart = performance.now();
+    statTimer = setInterval(() => {
+      const dt = (performance.now() - statStart) / 1000;
+      $("stat").textContent = `verbunden — ${(sampleCount / dt).toFixed(0)} Hz (${sampleCount} Pakete)`;
+    }, 500);
+  } catch (e) {
+    $("stat").textContent = "Fehler: " + e.message;
+  }
+}
+
+$("connectBtn").addEventListener("click", connect);
+</script>
+</body>
+</html>
