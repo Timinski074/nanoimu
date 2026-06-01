@@ -86,10 +86,10 @@ function onAccel(ev) {
 async function connect() {
   try {
     $("stat").textContent = "Suche…";
-    // Filter by service UUID (in the primary advertisement on Android Chrome)
-    // AND by name (Mac Chrome happily sees the scan response).
+    // Diagnostic: list ALL nearby BLE devices so we can verify NanoIMU is
+    // visible. Once confirmed working, switch back to a name/service filter.
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [SVC] }, { name: "NanoIMU" }],
+      acceptAllDevices: true,
       optionalServices: [SVC],
     });
     device.addEventListener("gattserverdisconnected", () => {
