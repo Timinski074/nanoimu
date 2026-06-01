@@ -86,8 +86,10 @@ function onAccel(ev) {
 async function connect() {
   try {
     $("stat").textContent = "Suche…";
+    // Filter by service UUID (in the primary advertisement on Android Chrome)
+    // AND by name (Mac Chrome happily sees the scan response).
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ name: "NanoIMU" }],
+      filters: [{ services: [SVC] }, { name: "NanoIMU" }],
       optionalServices: [SVC],
     });
     device.addEventListener("gattserverdisconnected", () => {
