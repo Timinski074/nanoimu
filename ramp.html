@@ -190,8 +190,9 @@ function onAccel(ev) {
 async function connect() {
   try {
     $("stat").textContent = "Suche…";
+    // No filter — pick from all visible BLE devices (diagnostic mode).
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ name: "NanoIMU" }, { services: [SVC] }],
+      acceptAllDevices: true,
       optionalServices: [SVC],
     });
     device.addEventListener("gattserverdisconnected", () => {
